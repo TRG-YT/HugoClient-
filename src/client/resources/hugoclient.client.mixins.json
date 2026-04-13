@@ -4,6 +4,9 @@
   "package": "dev.trg.hugoclient.mixin.client",
   "compatibilityLevel": "JAVA_21",
   "client": [
+    "MixinInGameHud",
+    "MixinEntityGlow",
+    "MixinMouse"
   ],
   "injectors": {
     "defaultRequire": 1

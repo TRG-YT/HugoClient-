@@ -2,8 +2,14 @@ package dev.trg.hugoclient.client;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
 import dev.trg.hugoclient.client.chat.ChatListener;
+import dev.trg.hugoclient.client.combat.CombatLogger;
 import dev.trg.hugoclient.client.command.PearlBotCommand;
+import dev.trg.hugoclient.client.config.HugoClientConfig;
 import dev.trg.hugoclient.client.config.PearlBotConfig;
+import dev.trg.hugoclient.client.feature.AutoAfkModule;
+import dev.trg.hugoclient.client.feature.ClientFeature;
+import dev.trg.hugoclient.client.feature.ItemDelayModule;
+import dev.trg.hugoclient.client.input.HugoClientKeyBindings;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -28,12 +34,35 @@ public class HugoclientClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        HugoClientConfig.load();
         PearlBotConfig.load();
+        HugoClientKeyBindings.register();
         ChatListener.register();
         PearlBotCommand.register();
+<<<<<<< Updated upstream
 
+=======
+>>>>>>> Stashed changes
         PlayerInfoSessionManager.initChatListener();
+
+
+        CombatLogger.register();
+
+        // ---------------------------------------------------------------
+        // Neue Module
+        // ---------------------------------------------------------------
+        // Feature 1: OP Glow läuft vollständig über MixinEntityGlow –
+        //            kein separates register() notwendig.
+
+        // Feature 2: Item Delay – Packet-Level-Priorisierung
+        ItemDelayModule.register();
+
+        // Feature 3: AutoAFK – automatisches /afk nach 4 Minuten Inaktivität
+        AutoAfkModule.register();
+
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            HugoClientKeyBindings.handleEndTick(client);
+
             Runnable action = pendingScreen;
             if (action != null) {
                 pendingScreen = null;
@@ -62,11 +91,14 @@ public class HugoclientClient implements ClientModInitializer {
         });
 
         UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
+            if (!HugoClientConfig.isEnabled(ClientFeature.SHIFT_RIGHT_CLICK_GUI)) return ActionResult.PASS;
             if (!world.isClient()) return ActionResult.PASS;
             if (hand != Hand.MAIN_HAND) return ActionResult.PASS;
+
             MinecraftClient mc = MinecraftClient.getInstance();
             if (mc == null || !mc.options.sneakKey.isPressed()) return ActionResult.PASS;
             if (!(entity instanceof PlayerEntity target)) return ActionResult.PASS;
+
             long now = System.currentTimeMillis();
             if (now - lastOpenMs < 300L) return ActionResult.SUCCESS;
             lastOpenMs = now;
@@ -74,7 +106,6 @@ public class HugoclientClient implements ClientModInitializer {
             openInfoScreen(target);
             return ActionResult.SUCCESS;
         });
-
     }
 
     private static void openTestModule() {
@@ -117,11 +148,10 @@ public class HugoclientClient implements ClientModInitializer {
         if (mc == null || me == null || target == null) return;
 
         String name = target.getName().getString();
-        UUID   uuid = target.getUuid();
+        UUID uuid = target.getUuid();
 
         PlayerInfoSession session = PlayerInfoSessionManager.start(name, uuid);
         CommandUtil.send(mc, "statsall " + session.targetName);
-        
         CommandUtil.send(mc, "clan uinfo " + session.targetName);
 
         me.sendMessage(

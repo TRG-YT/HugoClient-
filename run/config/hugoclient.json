@@ -1,0 +1,11 @@
+{
+  "features": {
+    "shift_right_click_gui": true,
+    "combat_log_counter": true,
+    "pearlbot": false,
+    "op_glow": true,
+    "item_priority": false,
+    "auto_afk": false,
+    "item_delay": true
+  }
+}

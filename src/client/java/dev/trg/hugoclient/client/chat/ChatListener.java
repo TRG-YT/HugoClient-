@@ -1,7 +1,9 @@
 package dev.trg.hugoclient.client.chat;
 
 import dev.trg.hugoclient.client.BotExecutor;
+import dev.trg.hugoclient.client.config.HugoClientConfig;
 import dev.trg.hugoclient.client.config.PearlBotConfig;
+import dev.trg.hugoclient.client.feature.ClientFeature;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.text.Text;
 
@@ -31,7 +33,7 @@ public class ChatListener {
     }
 
     private static void handleMessage(String raw) {
-
+        if (!HugoClientConfig.isEnabled(ClientFeature.PEARLBOT)) return;
         if (PearlBotConfig.getAll().isEmpty()) return;
 
         String full = raw.trim();

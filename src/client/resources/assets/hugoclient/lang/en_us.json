@@ -1,0 +1,13 @@
+{
+  "key.categories.hugoclient": "HugoClient",
+  "key.category.hugoclient.click_gui": "HugoClient",
+  "key.hugoclient.open_click_gui": "Open Click GUI",
+  "screen.hugoclient.click_gui.title": "HugoClient Click GUI",
+  "screen.hugoclient.click_gui.subtitle": "Manage feature toggles",
+  "feature.hugoclient.pearlbot": "Pearlbot",
+  "feature.hugoclient.combat_log_counter": "CombatLog Counter",
+  "feature.hugoclient.shift_right_click_gui": "Shift + Right Click GUI",
+  "feature.hugoclient.op_glow": "OP Glow",
+  "feature.hugoclient.item_delay": "OP Pickup",
+  "feature.hugoclient.auto_afk": "AutoAFK"
+}

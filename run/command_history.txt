@@ -1,0 +1,18 @@
+/testmodule
+/pearlbot save fssd
+/testmodule
+/kill @e[type=!minecraft:player]
+/time set day
+/kill @e[type=!minecraft:player]
+/testmodule
+/pearlbot save Player950
+/testmodule
+/pearlbot
+/pearlbot save 2
+/testmodule
+/gamemode survival
+/give Player451 minecraft:totem_of_undying 36
+/gamemode creative
+/gamemode survival
+/gamemode creative
+/gamemode survival

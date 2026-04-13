@@ -1,0 +1,7 @@
+Source patch note:
+- ITEM_DELAY rewritten to inventory rescue logic
+- MixinClientPlayNetworkHandler removed
+- ItemPriorityModule removed
+- UILoader.java removed
+- Inventory Rescue now only drops from the upper inventory rows (main inventory 9-35), never from the hotbar
+- Inventory Rescue sped up: up to 3 drops per tick, 1 tick trash cooldown, 2 tick totem cooldown
