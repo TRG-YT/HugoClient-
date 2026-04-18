@@ -7,14 +7,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * Versionstoleranter Mouse-Mixin für 1.21.4 bis 1.21.11.
- *
- * <p>Die Signatur von Mouse#onMouseButton hat sich zwischen den Patch-Versionen
- * geändert. Deshalb werden hier bewusst keine Zielparameter übernommen, sondern
- * nur das Callback selbst. So bleibt der Inject kompatibel, solange der
- * Methodenname gleich bleibt.
- */
+
 @Mixin(Mouse.class)
 public class MixinMouse {
 

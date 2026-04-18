@@ -6,10 +6,7 @@ import net.minecraft.item.Items;
 
 import java.util.Set;
 
-/**
- * Zentrale Verwaltung für alle Items, die vom OP-Glow-Feature hervorgehoben
- * oder von Inventory Rescue geschützt werden.
- */
+
 public final class OpGlowManager {
 
     public static final int GLOW_COLOR_GOLD = 0xFFFFAA00;

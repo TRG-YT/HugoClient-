@@ -19,8 +19,9 @@ import java.util.List;
 
 public final class ItemDelayModule {
     private static final double GROUND_CHECK_RADIUS = 1.35;
-    private static final int RETRY_DELAY_TICKS = 6;
-    private static final int ACTION_TIMEOUT_TICKS = 8;
+    private static final int RETRY_DELAY_TICKS = 1;
+    private static final int ACTION_TIMEOUT_TICKS = 10;
+
     private static final int EMPTY_SPACE_SLOT = -999;
 
     private static PendingDrop pendingDrop;
@@ -43,10 +44,18 @@ public final class ItemDelayModule {
             resetState();
             return;
         }
+
+        // FIX 2: ServerUtil.isAllowedEnvironment() prüfen.
+        // Sicherstellen, dass diese Methode NICHT auf echten Multiplayer-Servern false zurückgibt.
+        // Falls ServerUtil intern auf client.isIntegratedServerRunning() oder ähnliches prüft,
+        // muss das angepasst werden – z.B. durch Verwendung von:
+        //   !client.isInSingleplayer() (true = Multiplayer/Server)
+        // oder einfach die Methode ganz entfernen, falls keine Whitelisting-Logik gewünscht ist.
         if (!ServerUtil.isAllowedEnvironment()) {
             resetState();
             return;
         }
+
         if (player.getAbilities().creativeMode || player.isSpectator()) {
             resetState();
             return;
@@ -101,7 +110,13 @@ public final class ItemDelayModule {
                 player
         );
 
-        pendingDrop = new PendingDrop(slotToDrop.id, slotToDrop.getIndex(), expected, PendingStage.WAIT_CURSOR_PICKUP, ACTION_TIMEOUT_TICKS);
+        pendingDrop = new PendingDrop(
+                slotToDrop.id,
+                slotToDrop.getIndex(),
+                expected,
+                PendingStage.WAIT_CURSOR_PICKUP,
+                ACTION_TIMEOUT_TICKS
+        );
     }
 
     private static void tickPendingDrop(MinecraftClient client, ClientPlayerEntity player) {
@@ -125,14 +140,17 @@ public final class ItemDelayModule {
         switch (pendingDrop.stage) {
             case WAIT_CURSOR_PICKUP -> {
                 if (cursor.isEmpty()) {
+                    // Cursor noch leer: Server hat den Pickup noch nicht verarbeitet.
                     return;
                 }
 
                 if (!ItemStack.areItemsAndComponentsEqual(cursor, pendingDrop.expectedStack)) {
+                    // Cursor hat ein unerwartetes Item → inkonsistenter Zustand, abbrechen.
                     failPendingDrop();
                     return;
                 }
 
+                // Cursor hält das erwartete Item → Drop auslösen.
                 client.interactionManager.clickSlot(
                         player.playerScreenHandler.syncId,
                         EMPTY_SPACE_SLOT,
@@ -146,15 +164,16 @@ public final class ItemDelayModule {
             }
 
             case WAIT_CURSOR_DROP -> {
+
+
                 if (!cursor.isEmpty()) {
                     return;
                 }
 
                 if (originSlot != null && !originSlot.getStack().isEmpty()) {
-                    // Server hat die Änderung noch nicht bestätigt oder den Klick zurückgerollt.
+                    failPendingDrop();
                     return;
                 }
-
                 announceDrop(player, pendingDrop.expectedStack);
                 resetState();
             }
@@ -171,6 +190,8 @@ public final class ItemDelayModule {
         retryCooldown = 0;
     }
 
+    // ── Rest der Klasse unverändert ────────────────────────────────────────────
+
     private static int countValuableGroundItemsUnderPlayer(ClientPlayerEntity player) {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client == null || client.world == null) return 0;
@@ -181,7 +202,6 @@ public final class ItemDelayModule {
                 box,
                 entity -> !entity.getStack().isEmpty() && OpGlowManager.isHighlightedItem(entity.getStack())
         );
-
         return items.size();
     }
 
@@ -189,18 +209,15 @@ public final class ItemDelayModule {
         int free = 0;
         for (Slot slot : player.playerScreenHandler.slots) {
             if (slot.inventory != player.getInventory()) continue;
-
             int invIndex = slot.getIndex();
             if (!isMainInventorySlot(invIndex)) continue;
-
-            if (!slot.hasStack()) {
-                free++;
-            }
+            if (!slot.hasStack()) free++;
         }
         return free;
     }
 
     private static Slot findDropSlot(ClientPlayerEntity player) {
+        // Bestehende Prioritäten unverändert
         Slot slot = findPotionSlot(player, false);
         if (slot != null) return slot;
 
@@ -210,18 +227,26 @@ public final class ItemDelayModule {
         slot = findTotemSlot(player, false);
         if (slot != null) return slot;
 
-        // Multiplayer-Fallback: wenn nur die Hotbar disposable Items enthält,
-        // darf auch dort gedroppt werden – bevorzugt aber nie der aktuell aktive Slot.
         slot = findPotionSlot(player, true);
         if (slot != null) return slot;
 
         slot = findUtilityBlockSlot(player, true);
         if (slot != null) return slot;
 
-        return findTotemSlot(player, true);
+        slot = findTotemSlot(player, true);
+        if (slot != null) return slot;
+
+        // NEU: Fallback auf generische Junk-Items
+        return findJunkSlot(player);
     }
 
-    private static Slot findPotionSlot(ClientPlayerEntity player, boolean includeHotbar) {
+
+    /**
+     * Letzter Fallback: Droppe ein Item das keinen Kampfwert hat.
+     * Priorität: hohe Stack-Größe zuerst, Hotbar wird gemieden.
+     * Items die nie gedroppt werden dürfen sind explizit ausgeschlossen.
+     */
+    private static Slot findJunkSlot(ClientPlayerEntity player) {
         Slot best = null;
         int bestScore = Integer.MIN_VALUE;
 
@@ -229,17 +254,15 @@ public final class ItemDelayModule {
             if (slot.inventory != player.getInventory()) continue;
 
             int invIndex = slot.getIndex();
-            if (!isCandidateInventorySlot(player, invIndex, includeHotbar)) continue;
+            if (!isUpperInventorySlot(invIndex)) continue;
 
             ItemStack stack = slot.getStack();
             if (stack.isEmpty()) continue;
-            if (!isPotionItem(stack)) continue;
+
+            if (isProtectedItem(stack)) continue;
 
             int score = stack.getCount();
-            if (stack.getItem() == Items.LINGERING_POTION) score += 30;
-            if (stack.getItem() == Items.SPLASH_POTION) score += 20;
-            if (stack.getItem() == Items.POTION) score += 10;
-            if (isHotbarSlot(invIndex)) score -= 1000;
+            score += getJunkPriority(stack);
 
             if (best == null || score > bestScore) {
                 best = slot;
@@ -247,6 +270,90 @@ public final class ItemDelayModule {
             }
         }
 
+        return best;
+    }
+
+
+    private static int getJunkPriority(ItemStack stack) {
+        Item item = stack.getItem();
+
+        // Explizit "wertlos" → hohe Priorität zum Droppen
+        if (item == Items.COBBLESTONE)          return  500;
+        if (item == Items.GRAVEL)               return  500;
+        if (item == Items.DIRT)                 return  500;
+        if (item == Items.SAND)                 return  500;
+        if (item == Items.NETHERRACK)           return  500;
+        if (item == Items.STONE)                return  400;
+        if (item == Items.ANDESITE)             return  400;
+        if (item == Items.DIORITE)              return  400;
+        if (item == Items.GRANITE)              return  400;
+        if (item == Items.DEEPSLATE)            return  400;
+        if (item == Items.BLACKSTONE)           return  400;
+        if (item == Items.TUFF)                 return  400;
+        if (item == Items.ROTTEN_FLESH)         return  300;
+        if (item == Items.BONE)                 return  300;
+        if (item == Items.ARROW)                return  200;
+        if (item == Items.GOLD_BLOCK)           return  100;
+        if (item == Items.IRON_BLOCK)           return  100;
+
+        return 0;
+    }
+
+
+    private static boolean isProtectedItem(ItemStack stack) {
+        Item item = stack.getItem();
+        return item == Items.TOTEM_OF_UNDYING
+                || item == Items.ELYTRA
+                || item == Items.ENCHANTED_GOLDEN_APPLE
+                || item == Items.NETHER_STAR
+                || isPotionItem(stack)
+                || isNetheriteArmor(item)
+                || isNetheriteTool(item)
+                || isDiamondArmor(item);
+    }
+
+    private static boolean isNetheriteArmor(Item item) {
+        return item == Items.NETHERITE_HELMET
+                || item == Items.NETHERITE_CHESTPLATE
+                || item == Items.NETHERITE_LEGGINGS
+                || item == Items.NETHERITE_BOOTS;
+    }
+
+    private static boolean isNetheriteTool(Item item) {
+        return item == Items.NETHERITE_SWORD
+                || item == Items.NETHERITE_AXE
+                || item == Items.NETHERITE_PICKAXE
+                || item == Items.NETHERITE_SHOVEL
+                || item == Items.NETHERITE_HOE;
+    }
+
+    private static boolean isDiamondArmor(Item item) {
+        return item == Items.DIAMOND_HELMET
+                || item == Items.DIAMOND_CHESTPLATE
+                || item == Items.DIAMOND_LEGGINGS
+                || item == Items.DIAMOND_BOOTS;
+    }
+
+
+    private static Slot findPotionSlot(ClientPlayerEntity player, boolean includeHotbar) {
+        Slot best = null;
+        int bestScore = Integer.MIN_VALUE;
+
+        for (Slot slot : player.playerScreenHandler.slots) {
+            if (slot.inventory != player.getInventory()) continue;
+            int invIndex = slot.getIndex();
+            if (!isCandidateInventorySlot(player, invIndex, includeHotbar)) continue;
+            ItemStack stack = slot.getStack();
+            if (stack.isEmpty() || !isPotionItem(stack)) continue;
+
+            int score = stack.getCount();
+            if (stack.getItem() == Items.LINGERING_POTION) score += 30;
+            if (stack.getItem() == Items.SPLASH_POTION)   score += 20;
+            if (stack.getItem() == Items.POTION)          score += 10;
+            if (isHotbarSlot(invIndex))                   score -= 1000;
+
+            if (best == null || score > bestScore) { best = slot; bestScore = score; }
+        }
         return best;
     }
 
@@ -256,84 +363,61 @@ public final class ItemDelayModule {
 
         for (Slot slot : player.playerScreenHandler.slots) {
             if (slot.inventory != player.getInventory()) continue;
-
             int invIndex = slot.getIndex();
             if (!isCandidateInventorySlot(player, invIndex, includeHotbar)) continue;
-
             ItemStack stack = slot.getStack();
             if (stack.isEmpty()) continue;
-
             Item item = stack.getItem();
             if (item != Items.OBSIDIAN && item != Items.COBWEB) continue;
 
             int score = stack.getCount();
             if (item == Items.OBSIDIAN) score += 20;
-            if (item == Items.COBWEB) score += 10;
+            if (item == Items.COBWEB)   score += 10;
             if (isHotbarSlot(invIndex)) score -= 1000;
 
-            if (best == null || score > bestScore) {
-                best = slot;
-                bestScore = score;
-            }
+            if (best == null || score > bestScore) { best = slot; bestScore = score; }
         }
-
         return best;
     }
 
     private static Slot findTotemSlot(ClientPlayerEntity player, boolean includeHotbar) {
-        if (countAllTotems(player) <= 1) {
-            return null;
-        }
+        if (countAllTotems(player) <= 1) return null;
 
         Slot best = null;
         int bestCount = Integer.MIN_VALUE;
 
         for (Slot slot : player.playerScreenHandler.slots) {
             if (slot.inventory != player.getInventory()) continue;
-
             int invIndex = slot.getIndex();
             if (!isCandidateInventorySlot(player, invIndex, includeHotbar)) continue;
-
             ItemStack stack = slot.getStack();
             if (stack.isEmpty() || stack.getItem() != Items.TOTEM_OF_UNDYING) continue;
 
             int score = stack.getCount();
             if (isHotbarSlot(invIndex)) score -= 1000;
 
-            if (best == null || score > bestCount) {
-                best = slot;
-                bestCount = score;
-            }
+            if (best == null || score > bestCount) { best = slot; bestCount = score; }
         }
-
         return best;
     }
 
     private static int countAllTotems(ClientPlayerEntity player) {
         int total = 0;
-
         for (Slot slot : player.playerScreenHandler.slots) {
             if (slot.inventory != player.getInventory()) continue;
-
             ItemStack stack = slot.getStack();
-            if (!stack.isEmpty() && stack.getItem() == Items.TOTEM_OF_UNDYING) {
+            if (!stack.isEmpty() && stack.getItem() == Items.TOTEM_OF_UNDYING)
                 total += stack.getCount();
-            }
         }
-
         ItemStack offhand = player.getOffHandStack();
-        if (!offhand.isEmpty() && offhand.getItem() == Items.TOTEM_OF_UNDYING) {
+        if (!offhand.isEmpty() && offhand.getItem() == Items.TOTEM_OF_UNDYING)
             total += offhand.getCount();
-        }
-
         return total;
     }
 
     private static Slot getPlayerInventorySlotById(ClientPlayerEntity player, int slotId) {
         for (Slot slot : player.playerScreenHandler.slots) {
-            if (slot.id == slotId && slot.inventory == player.getInventory()) {
-                return slot;
-            }
+            if (slot.id == slotId && slot.inventory == player.getInventory()) return slot;
         }
         return null;
     }
@@ -342,17 +426,11 @@ public final class ItemDelayModule {
         String prefix;
         Item item = droppedStack.getItem();
 
-        if (isPotionItem(droppedStack)) {
-            prefix = "§dPotion gedroppt";
-        } else if (item == Items.OBSIDIAN) {
-            prefix = "§5Obsidian gedroppt";
-        } else if (item == Items.COBWEB) {
-            prefix = "§fCobweb gedroppt";
-        } else if (item == Items.TOTEM_OF_UNDYING) {
-            prefix = "§cTotem gedroppt";
-        } else {
-            prefix = "§7Item gedroppt";
-        }
+        if (isPotionItem(droppedStack))         prefix = "§dPotion gedroppt";
+        else if (item == Items.OBSIDIAN)        prefix = "§5Obsidian gedroppt";
+        else if (item == Items.COBWEB)          prefix = "§fCobweb gedroppt";
+        else if (item == Items.TOTEM_OF_UNDYING)prefix = "§cTotem gedroppt";
+        else                                    prefix = "§7Item gedroppt";
 
         player.sendMessage(
                 Text.literal("§6[Inventory Rescue] " + prefix + " §7→ §f" + droppedStack.getName().getString()),
@@ -360,27 +438,13 @@ public final class ItemDelayModule {
         );
     }
 
-    private static boolean isMainInventorySlot(int invIndex) {
-        return invIndex >= 0 && invIndex < 36;
-    }
-
-    private static boolean isHotbarSlot(int invIndex) {
-        return invIndex >= 0 && invIndex < 9;
-    }
-
-    private static boolean isUpperInventorySlot(int invIndex) {
-        return invIndex >= 9 && invIndex < 36;
-    }
+    private static boolean isMainInventorySlot(int invIndex)  { return invIndex >= 0 && invIndex < 36; }
+    private static boolean isHotbarSlot(int invIndex)         { return invIndex >= 0 && invIndex < 9; }
+    private static boolean isUpperInventorySlot(int invIndex) { return invIndex >= 9 && invIndex < 36; }
 
     private static boolean isCandidateInventorySlot(ClientPlayerEntity player, int invIndex, boolean includeHotbar) {
-        if (isUpperInventorySlot(invIndex)) {
-            return true;
-        }
-
-        if (!includeHotbar || !isHotbarSlot(invIndex)) {
-            return false;
-        }
-
+        if (isUpperInventorySlot(invIndex)) return true;
+        if (!includeHotbar || !isHotbarSlot(invIndex)) return false;
         int selectedSlot = InventoryCompat.getSelectedSlot(player.getInventory());
         return invIndex != selectedSlot;
     }
@@ -402,7 +466,8 @@ public final class ItemDelayModule {
         private PendingStage stage;
         private int timeoutTicks;
 
-        private PendingDrop(int slotId, int inventoryIndex, ItemStack expectedStack, PendingStage stage, int timeoutTicks) {
+        private PendingDrop(int slotId, int inventoryIndex, ItemStack expectedStack,
+                            PendingStage stage, int timeoutTicks) {
             this.slotId = slotId;
             this.inventoryIndex = inventoryIndex;
             this.expectedStack = expectedStack;

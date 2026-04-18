@@ -1,4 +1,4 @@
-package dev.trg.hugoclient.mixin.client;
+package dev.trg.hugoclient.client.mixin.client;
 
 import dev.trg.hugoclient.client.combat.CombatLogger;
 import net.minecraft.client.gui.hud.InGameHud;
@@ -8,13 +8,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * Fängt die Server-Action-Bar-Nachricht „Du befindest dich im Kampf" ab,
- * bevor sie gerendert wird.
- *
- * Statt dem Original-Text startet/verlängert CombatLogger den 20-s-Timer
- * und zeigt per Tick-Handler „Combat: Xs" an.
- */
 @Mixin(InGameHud.class)
 public class MixinInGameHud {
 

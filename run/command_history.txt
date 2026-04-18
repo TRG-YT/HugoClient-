@@ -16,3 +16,5 @@
 /gamemode survival
 /gamemode creative
 /gamemode survival
+/pearlbot save asfsadf
+/testmodule

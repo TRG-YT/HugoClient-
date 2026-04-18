@@ -39,25 +39,9 @@ public class HugoclientClient implements ClientModInitializer {
         HugoClientKeyBindings.register();
         ChatListener.register();
         PearlBotCommand.register();
-<<<<<<< Updated upstream
-
-=======
->>>>>>> Stashed changes
         PlayerInfoSessionManager.initChatListener();
-
-
         CombatLogger.register();
-
-        // ---------------------------------------------------------------
-        // Neue Module
-        // ---------------------------------------------------------------
-        // Feature 1: OP Glow läuft vollständig über MixinEntityGlow –
-        //            kein separates register() notwendig.
-
-        // Feature 2: Item Delay – Packet-Level-Priorisierung
         ItemDelayModule.register();
-
-        // Feature 3: AutoAFK – automatisches /afk nach 4 Minuten Inaktivität
         AutoAfkModule.register();
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {

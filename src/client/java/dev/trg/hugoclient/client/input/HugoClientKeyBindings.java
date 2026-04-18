@@ -27,7 +27,6 @@ public final class HugoClientKeyBindings {
     }
 
     public static void register() {
-        // Stellt sicher, dass die statische Initialisierung beim Start ausgeführt wird.
     }
 
     public static void handleEndTick(MinecraftClient client) {
